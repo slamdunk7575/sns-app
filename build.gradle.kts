@@ -4,6 +4,32 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("io.freefair.lombok") version "9.5.0"
     id("com.diffplug.spotless") version "8.9.0"
+    id("com.google.cloud.tools.jib") version "3.5.4"
+}
+
+jib {
+    from {
+        // 실행에 필요한 것은 JRE 뿐이라 JRE 베이스를 사용
+        image = "eclipse-temurin:25-jre-alpine"
+        platforms {
+            platform {
+                // Apple Silicon 과 Intel 모두 지원하도록 빌드머신 아키텍처를 따름
+                architecture = if (System.getProperty("os.arch") == "aarch64") "arm64" else "amd64"
+                os = "linux"
+            }
+        }
+    }
+    to {
+        image = "springboot-sns:latest"
+    }
+    container {
+        ports = listOf("8080")
+        // 리눅스 계정 권환 관련 설정(사용자 ID: 그룹 ID)
+        // 관리자 계정 root ID 는 0:0 임
+        // 즉, 일반 사용자로 실행시키면 애플리케이션이 취약점이 생겨도 이 이미지가 실행되는 컨테이너 내부 파일이나
+        // 시스템 설정을 변경하는 권한을 줄일 수 있음
+        user = "1000:1000"
+    }
 }
 
 group = "com.apiece"
@@ -23,6 +49,7 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.session:spring-session-data-redis")

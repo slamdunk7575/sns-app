@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# env 는 github actions 모든 job 에서 공유해서 쓸 수 있는 환경변수를 의미함
+env:
+  IMAGE: ghcr.io/slamdunk7575/sns-app
+
+jobs:
+  # job 이름을 build 라고 지음
+  build:
+    # ubuntu 서버는 github 에서 제공
+    runs-on: ubuntu-24.04
+    # GITHUB_TOKEN 권한 설정 (contents 는 read 만 주고 GHCR 에는 write 권한 설정)
+    # GITHUB_TOKEN 는 github actions 가 job 이 실행될때 자동으로 부여하는 임시 시크릿 정보
+    permissions:
+      contents: read
+      packages: write
+    # job 이 여러개 있을때 outputs 에 정의한 값을 전달할 수 있음 (예: 아래 update-manifest job 에 전달)
+    outputs:
+      # 아래 job step 중에 meta 라고 정의한 부분을 가져옴
+      image-tag: ${{ steps.meta.outputs.version }}
+    # job 안에서 여러가지 작업을 step 으로 구성할 수 있음
+    steps:
+      # actions 는 github actions 가 공식적으로 만들어 놓은 자동화 도구
+      # checkout@v4 는 git checkout 하여 app 실행환경을 가져옴
+      - uses: actions/checkout@v4
+
+      # JAVA 셋업
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build & Test
+        run: ./gradlew build
+
+      - id: meta
+        name: Resolve image tag
+        # GITHUB_SHA, $GITHUB_OUTPUT 은 github actions 가 자동으로 제공하는 환경변수
+        # GITHUB_SHA 는 이번 커밋 대상의 커밋의 해쉬값
+        # GITHUB_SHA 앞의 7자리를 자르고 GITHUB_OUTPUT 변수에 저장
+        run: echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Push image
+        run: |
+          ./gradlew jib \
+            -Djib.to.image=${{ env.IMAGE }}:${{ steps.meta.outputs.version }} \
+            -Djib.to.auth.username=${{ github.actor }} \
+            -Djib.to.auth.password=${{ secrets.GITHUB_TOKEN }}
+# GHCR 에 이미지를 올리기 위해선 권한이 필요하여 인증할 수 있는 username, password 전달
+
+
+  update-manifest:
+    # needs 설정은 앞의 build 라는 이름의 job 이 선행되어야 이 job 을 실행한다는 의미
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: slamdunk7575/sns-devops
+          token: ${{ secrets.DEVOPS_TOKEN }}
+
+      - name: Update image tag
+        run: |
+          IMAGE_TAG="${{ needs.build.outputs.image-tag }}"
+          sed -i "s|image: .*sns-app.*|image: ${{ env.IMAGE }}:${IMAGE_TAG}|" k8s/sns-app/app.yaml
+# 이전 build job 에서 만든 IMAGE_TAG 값을 가지고 와서 (예: needs.build.outputs.image-tag)
+# k8s/sns-app/app.yaml 파일의 image: .*sns-app.* 태그의 정규화 값을 찾아서 새로운 image 태그 값으로 변경하겠다는 의미
+# 예: image: springboot-sns:latest -> image: ghcr.io/slamdunk7575/sns-app:1234abc
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/sns-app/app.yaml
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "deploy: sns-app ${GITHUB_SHA::7}"
+          git push
+# user.name, user.email 의 github-actions[bot] 는 bot 이 했다는 의미로 임의 생성
+# 만약, 변경된 부분이 없다면 "No changes" 출력하고 exit 0 바로 종료

@@ -14,7 +14,8 @@ jib {
         platforms {
             platform {
                 // Apple Silicon 과 Intel 모두 지원하도록 빌드머신 아키텍처를 따름
-                architecture = if (System.getProperty("os.arch") == "aarch64") "arm64" else "amd64"
+                // architecture = if (System.getProperty("os.arch") == "aarch64") "arm64" else "amd64"
+                architecture = "arm64"
                 os = "linux"
             }
         }

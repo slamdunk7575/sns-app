@@ -17,25 +17,20 @@ spring:
   session:
     store-type: redis
 management:
-  # 애플리케이션에서 OpenTelemetry 컬렉터로 보내는건 tracing 밖에 없음
-  # logging 경우: OpenTelemetry 컬렉터가 백그라운드에서 주기적으로 워커노드를 조회하면서 파일 한줄한줄 가져옴
-  # metrics 경우: Prometheus endpoint 열어두어(/actuator/prometheus) 주기적으로 애플리케이션의 메트릭 정보를 가져감
-  # 따라서 metrics, logging 비활성화
-  # sampling probability 1.0 설정은 모든 트레이싱을 다 보낸다는 설정 (0.5 로 하면 두개중에 1개만 보낸다는 뜻)
   otlp:
     metrics:
       export:
         enabled: false
-    logging:
-      export:
-        otlp:
-          enabled: false
-    tracing:
-      export:
-        otlp:
-          enabled: true
-      sampling:
-        probability: 1.0
+  logging:
+    export:
+      otlp:
+        enabled: false
+  tracing:
+    export:
+      otlp:
+        enabled: true
+    sampling:
+      probability: 1.0
   metrics:
     tags:
       application: sns-app
@@ -47,7 +42,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: "health, prometheus"
+        include: "health,prometheus"
   opentelemetry:
     tracing:
       export:

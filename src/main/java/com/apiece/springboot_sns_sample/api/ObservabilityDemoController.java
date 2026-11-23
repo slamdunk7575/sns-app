@@ -56,7 +56,7 @@ public class ObservabilityDemoController {
                 span.setStatus(StatusCode.ERROR, "recommend request failed");
                 span.recordException(e);
 
-                if ("incident".equals(scenario) || !(e instanceof RestClientException)) {
+                if (!"incident".equals(scenario) || !(e instanceof RestClientException)) {
                     throw e;
                 }
 
